@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ホワイトボードスケジュール登録</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f4f9; margin: 0; padding: 1rem; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; }
+        .phase { margin-bottom: 2rem; border-bottom: 1px solid #ddd; padding-bottom: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; color: #555; font-weight: bold; }
+        input { width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 0.75rem; border: none; border-radius: 4px; background-color: #007bff; color: white; font-size: 1rem; cursor: pointer; transition: background-color 0.2s; }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #ccc; }
+        #status { text-align: center; margin-top: 1.5rem; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1.5rem; }
+        th, td { border: 1px solid #ddd; padding: 0.8rem; text-align: left; }
+        th { background-color: #f2f2f2; }
+        td input[type="text"] { width: 95%; }
+        
+        .mobile-only { display: none; }
+        #mobileEventsContainer { display: none; }
+
+        /* Styles for Image Zoom */
+        #imagePreviewContainer {
+            overflow: auto; /* Enable scrollbars for panning when zoomed */
+            border: 1px solid #ccc;
+            margin-top: 1rem;
+            display: none;
+            height: 400px;
+            resize: vertical;
+            cursor: grab;
+            user-select: none; /* Prevent text selection while dragging */
+        }
+        #imagePreviewContainer.grabbing {
+            cursor: grabbing;
+        }
+        #imagePreview {
+            width: 100%;
+            height: auto;
+            transform-origin: top left;
+            transition: transform 0.2s ease;
+        }
+        #zoomControls {
+            text-align: center;
+            margin-top: 0.5rem;
+            display: none;
+        }
+        #zoomControls button {
+            width: auto;
+            padding: 0.5rem 1rem;
+            margin: 0 0.2rem;
+            font-size: 1.2rem;
+            line-height: 1;
+        }
+
+        /* Responsive Styles for tablet and below */
+        @media (max-width: 768px) {
+            .desktop-only { display: none; }
+            .mobile-only { display: block; }
+
+            #eventsTableContainer { display: none; }
+            #mobileEventsContainer { display: block; }
+            
+            .mobile-card {
+                border: 1px solid #ddd;
+                padding: 1rem;
+                margin-bottom: 1rem;
+                border-radius: 4px;
+            }
+            .mobile-card-row {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 0.5rem;
+                margin-bottom: 0.8rem;
+            }
+            .mobile-card-row:last-child {
+                margin-bottom: 0;
+            }
+            .mobile-card-row .input-group {
+                display: flex;
+                flex-grow: 1;
+                gap: 0.5rem;
+                width: 100%;
+            }
+             .mobile-card-row input[type="checkbox"] {
+                width: 20px;
+                height: 20px;
+                margin-right: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="desktop-only">ホワイトボードスケジュール登録</h1>
+        <h1 class="mobile-only" style="text-align: center;">ホワイトボード<br>スケジュール登録</h1>
+        
+        <div id="phase1" class="phase">
+            <h4>ステップ1: 画像を読み込む</h4>
+            <form id="analyzeForm">
+                <div class="form-group">
+                    <label for="scheduleImage">スケジュール画像:</label>
+                    <input type="file" id="scheduleImage" name="scheduleImage" accept="image/*" required>
+                </div>
+                <div id="imagePreviewContainer">
+                    <img id="imagePreview" src="#" alt="画像プレビュー" />
+                </div>
+                <div id="zoomControls">
+                    <button type="button" id="zoomInBtn" title="ズームイン">+</button>
+                    <button type="button" id="zoomOutBtn" title="ズームアウト">-</button>
+                    <button type="button" id="zoomResetBtn" title="リセット">100%</button>
+                </div>
+                <button type="submit" id="analyzeButton">解析実行</button>
+                <p style="font-size: 0.8rem; text-align: center; color: #555; margin-top: 0.5rem;">予定は直前まで変更される可能性があります。コーチやマネージャーからの情報を優先してください。</p>
+            </form>
+        </div>
+
+        <div id="phase2" class="phase" style="display: none;">
+            <h4>ステップ2: 予定を確認・修正</h4>
+            <form id="registerForm">
+                <div id="eventsTableContainer"></div>
+                <div id="mobileEventsContainer"></div>
+                <p id="phase2Status" style="text-align: center; font-weight: bold;"></p>
+                <button type="submit" id="registerButton">Googleカレンダーに登録</button>
+                <div id="registrationStatus" style="margin-top: 1rem;"></div>
+            </form>
+        </div>
+
+        <div id="phase3" class="phase" style="display: none;">
+            <h4>ステップ3: 整形済みテキストをコピー</h4>
+            <div class="form-group">
+                <label for="formattedText">コピー用のテキスト:</label>
+                <textarea id="formattedText" rows="10" style="width: 100%; font-family: monospace;" readonly></textarea>
+            </div>
+            <button id="copyButton">テキストをコピー</button>
+        </div>
+
+        <div id="status"></div>
+    </div>
+
+    <script>
+        // --- DOM要素の取得 ---
+        const analyzeForm = document.getElementById('analyzeForm');
+        const scheduleImageInput = document.getElementById('scheduleImage');
+        const imagePreview = document.getElementById('imagePreview');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const zoomControls = document.getElementById('zoomControls');
+        const zoomInBtn = document.getElementById('zoomInBtn');
+        const zoomOutBtn = document.getElementById('zoomOutBtn');
+        const zoomResetBtn = document.getElementById('zoomResetBtn');
+        const analyzeButton = document.getElementById('analyzeButton');
+        const statusDiv = document.getElementById('status');
+        
+        const phase2 = document.getElementById('phase2');
+        const registerForm = document.getElementById('registerForm');
+        const eventsTableContainer = document.getElementById('eventsTableContainer');
+        const mobileEventsContainer = document.getElementById('mobileEventsContainer');
+        const registerButton = document.getElementById('registerButton');
+        const phase2Status = document.getElementById('phase2Status');
+        const registrationStatus = document.getElementById('registrationStatus');
+
+        const phase3 = document.getElementById('phase3');
+        const formattedText = document.getElementById('formattedText');
+        const copyButton = document.getElementById('copyButton');
+
+        // --- イベントリスナー ---
+
+        // PCとモバイルビューの入力内容を同期させる
+        document.addEventListener('input', (e) => {
+            const target = e.target;
+            const syncId = target.dataset.syncId;
+            if (syncId) {
+                const value = target.type === 'checkbox' ? target.checked : target.value;
+                const otherInput = document.querySelector(`[data-sync-id="${syncId}"]:not([data-view="${target.dataset.view}"])`);
+                if (otherInput) {
+                    if (otherInput.type === 'checkbox') {
+                        otherInput.checked = value;
+                    } else {
+                        otherInput.value = value;
+                    }
+                }
+            }
+        });
+
+        let currentScale = 1;
+        const scaleStep = 0.2;
+
+        scheduleImageInput.addEventListener('change', () => {
+            const file = scheduleImageInput.files[0];
+            if (file) {
+                imagePreview.src = URL.createObjectURL(file);
+                imagePreviewContainer.style.display = 'block';
+                zoomControls.style.display = 'block';
+                // 新しい画像が読み込まれたらズームをリセット
+                currentScale = 1;
+                imagePreview.style.transform = `scale(${currentScale})`;
+            }
+        });
+
+        zoomInBtn.addEventListener('click', () => {
+            currentScale += scaleStep;
+            imagePreview.style.transform = `scale(${currentScale})`;
+        });
+
+        zoomOutBtn.addEventListener('click', () => {
+            // 縮小しすぎないように下限を設定
+            if (currentScale - scaleStep > 0.1) {
+                currentScale -= scaleStep;
+                imagePreview.style.transform = `scale(${currentScale})`;
+            }
+        });
+
+        zoomResetBtn.addEventListener('click', () => {
+            currentScale = 1;
+            imagePreview.style.transform = `scale(${currentScale})`;
+            // コンテナのスクロール位置もリセット
+            imagePreviewContainer.scrollTop = 0;
+            imagePreviewContainer.scrollLeft = 0;
+        });
+
+        // --- Drag to Pan Image Functionality ---
+        let isDown = false;
+        let startX;
+        let startY;
+        let scrollLeftStart;
+        let scrollTopStart;
+
+        imagePreviewContainer.addEventListener('mousedown', (e) => {
+            isDown = true;
+            imagePreviewContainer.classList.add('grabbing');
+            startX = e.pageX - imagePreviewContainer.offsetLeft;
+            startY = e.pageY - imagePreviewContainer.offsetTop;
+            scrollLeftStart = imagePreviewContainer.scrollLeft;
+            scrollTopStart = imagePreviewContainer.scrollTop;
+        });
+
+        imagePreviewContainer.addEventListener('mouseleave', () => {
+            isDown = false;
+            imagePreviewContainer.classList.remove('grabbing');
+        });
+
+        imagePreviewContainer.addEventListener('mouseup', () => {
+            isDown = false;
+            imagePreviewContainer.classList.remove('grabbing');
+        });
+
+        imagePreviewContainer.addEventListener('mousemove', (e) => {
+            if (!isDown) return;
+            e.preventDefault();
+            const x = e.pageX - imagePreviewContainer.offsetLeft;
+            const y = e.pageY - imagePreviewContainer.offsetTop;
+            const walkX = (x - startX);
+            const walkY = (y - startY);
+            imagePreviewContainer.scrollLeft = scrollLeftStart - walkX;
+            imagePreviewContainer.scrollTop = scrollTopStart - walkY;
+        });
+        
+        analyzeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            statusDiv.textContent = 'AIが画像を解析中です...';
+            analyzeButton.disabled = true;
+            phase2.style.display = 'none';
+            phase3.style.display = 'none';
+
+            const formData = new FormData(analyzeForm);
+            try {
+                const response = await fetch('/analyze', { method: 'POST', body: formData });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.message || '解析エラー');
+                
+                displayEventsTable(result);
+                phase2.style.display = 'block';
+                // phase3の表示を削除
+                statusDiv.textContent = '解析完了。内容を確認・修正してください。';
+            } catch (error) {
+                statusDiv.textContent = `解析エラー: ${error.message}`;
+            } finally {
+                analyzeButton.disabled = false;
+            }
+        });
+        
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const eventsData = getEventsFromTable();
+            
+            // 日付が空のイベントがないかチェック
+            const hasEmptyDate = eventsData.some(event => !event.full_date);
+            if (hasEmptyDate) {
+                registrationStatus.innerHTML = '<h3 style="color: red;">登録エラー</h3><p>日付が設定されていない予定があります。日付を入力してください。</p>';
+                return; // 処理を中断
+            }
+
+            statusDiv.textContent = 'カレンダーに登録中です...';
+            registrationStatus.innerHTML = ''; // 前回の結果をクリア
+            registerButton.disabled = true;
+            phase3.style.display = 'none'; // 以前の結果を隠す
+            
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ events: eventsData }),
+                });
+                if (!response.ok) throw new Error(`サーバーエラー: ${response.statusText}`);
+
+                const results = await response.json();
+                displayResults(results);
+                statusDiv.textContent = ''; // 登録中メッセージをクリア
+
+                // 成功したイベントのみを抽出してテキストを生成
+                const successfulTitles = results.filter(r => r.status === 'success').map(r => r.title);
+                const successfulEvents = eventsData.filter(event => successfulTitles.includes(`[${event.category}] ${event.title}`));
+
+                if (successfulEvents.length > 0) {
+                    generateFormattedText(successfulEvents);
+                    phase3.style.display = 'block'; // 成功した場合のみphase3を表示
+                }
+
+            } catch (error)
+ {
+                statusDiv.textContent = `登録エラー: ${error.message}`;
+            } finally {
+                registerButton.disabled = false;
+            }
+        });
+
+        // --- ヘルパー関数 ---
+
+        function displayEventsTable(aiEvents) {
+            console.log("[Debug] displayEventsTable received:", aiEvents);
+            const dateMap = findBestDateMap(aiEvents);
+            console.log("[Debug] Final dateMap:", dateMap);
+            
+            const eventsToDisplay = aiEvents.filter(event => {
+                const hasVs = event.title && event.title.toLowerCase().includes('vs');
+                if (!hasVs) console.log(`[Debug] Filtering out (no "vs"):`, event.title);
+                return hasVs;
+            });
+            console.log("[Debug] Filtered events (eventsToDisplay):", eventsToDisplay);
+
+            const categoryOrder = ["A", "B", "C", "1年"];
+            eventsToDisplay.sort((a, b) => {
+                const categoryIndexA = categoryOrder.indexOf(a.category);
+                const categoryIndexB = categoryOrder.indexOf(b.category);
+                if (categoryIndexA !== categoryIndexB) return categoryIndexA - categoryIndexB;
+                return a.column - b.column;
+            });
+
+            let tableHTML = `
+                <table class="desktop-only">
+                    <thead>
+                        <tr>
+                            <th>登録</th><th>日付</th><th>カテゴリ</th><th>タイトル</th><th>場所</th><th>詳細</th><th>時間</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            
+            let mobileHTML = '';
+
+            if (eventsToDisplay.length === 0) {
+                console.warn("[Debug] No events to display after filtering.");
+            }
+
+            eventsToDisplay.forEach((event, index) => {
+                const full_date = dateMap[event.header_text] || '';
+                const rowStyle = !full_date ? 'style="background-color: #fff0f0;"' : '';
+                if (!full_date) {
+                    console.warn(`[Debug] No date found for header: "${event.header_text}". Displaying as empty.`, event);
+                }
+                const location_display = (event.location_str && event.location_str.toUpperCase() === 'HG') 
+                                           ? '東久留米総合高校' 
+                                           : (event.location_str || '');
+                
+                const fields = {
+                    register: { type: 'checkbox', value: 'checked' },
+                    full_date: { type: 'date', value: full_date },
+                    category: { type: 'text', value: event.category || '' },
+                    title: { type: 'text', value: event.title || '' },
+                    location_str: { type: 'text', value: location_display },
+                    description: { type: 'text', value: event.description || '' },
+                    time_str: { type: 'text', value: event.time_str || '終日' },
+                    column: { type: 'hidden', value: event.column }
+                };
+
+                // --- PC Table Row ---
+                tableHTML += `<tr data-index="${index}" ${rowStyle}>`;
+                for (const [name, { type, value }] of Object.entries(fields)) {
+                    const checkedAttr = type === 'checkbox' && value === 'checked' ? 'checked' : '';
+                    const valueAttr = type !== 'checkbox' ? `value="${value}"` : '';
+                    const styleAttr = type === 'hidden' ? 'style="display:none;"' : '';
+                    tableHTML += `<td ${styleAttr}><input type="${type}" name="${name}" ${valueAttr} ${checkedAttr} data-sync-id="${index}-${name}" data-view="desktop"></td>`;
+                }
+                tableHTML += `</tr>`;
+
+                // --- Mobile Card ---
+                mobileHTML += `<div class="mobile-card" ${rowStyle}>`;
+                mobileHTML += `<div class="mobile-card-row">
+                                <input type="checkbox" name="register" ${fields.register.value} data-sync-id="${index}-register" data-view="mobile">
+                                <div class="input-group">
+                                    <input type="date" name="full_date" value="${fields.full_date.value}" data-sync-id="${index}-full_date" data-view="mobile" title="日付">
+                                    <input type="text" name="time_str" value="${fields.time_str.value}" data-sync-id="${index}-time_str" data-view="mobile" title="時間">
+                                </div>
+                               </div>`;
+                mobileHTML += `<div class="mobile-card-row">
+                                <div class="input-group">
+                                    <input type="text" name="category" value="${fields.category.value}" data-sync-id="${index}-category" data-view="mobile" title="カテゴリ" style="flex-basis: 60px;">
+                                    <input type="text" name="title" value="${fields.title.value}" data-sync-id="${index}-title" data-view="mobile" title="タイトル">
+                                </div>
+                               </div>`;
+                mobileHTML += `<div class="mobile-card-row">
+                                <div class="input-group">
+                                    <input type="text" name="location_str" value="${fields.location_str.value}" data-sync-id="${index}-location_str" data-view="mobile" title="場所">
+                                    <input type="text" name="description" value="${fields.description.value}" data-sync-id="${index}-description" data-view="mobile" title="詳細">
+                                </div>
+                               </div>`;
+                mobileHTML += `</div>`;
+            });
+
+            tableHTML += `</tbody></table>`;
+            eventsTableContainer.innerHTML = tableHTML;
+            mobileEventsContainer.innerHTML = mobileHTML;
+        }
+
+        function generateFormattedText(events) {
+            let output = '';
+            const dayOfWeekMap = ["日", "月", "火", "水", "木", "金", "土"];
+
+            events.forEach(event => {
+                const dateInput = event.full_date;
+                const timeStr = event.time_str;
+                const category = event.category;
+                const title = event.title;
+                const location = event.location_str;
+
+                if (!dateInput) return;
+
+                const date = new Date(dateInput + 'T00:00:00'); // JSTとして解釈させるためT00:00:00を付与
+                const month = date.getMonth() + 1;
+                const day = date.getDate();
+                const dayOfWeek = dayOfWeekMap[date.getDay()];
+
+                let timePart = '';
+                if (timeStr && timeStr !== '終日') {
+                    // "12:00-14:00" のような形式から "12:00" の部分だけを抽出
+                    const timeMatch = timeStr.match(/^(\d{1,2}:\d{2})/);
+                    if (timeMatch) {
+                        timePart = timeMatch[1].replace(':', '時');
+                    } else {
+                        timePart = timeStr; // マッチしない場合はそのまま使う
+                    }
+                } else {
+                    timePart = 'キックオフ時間未定';
+                }
+                
+                const firstLine = `${month}月${day}日（${dayOfWeek}）${timePart}`;
+                const secondLine = `[${category}]vs${title.replace(/vs/gi, '').trim()}@${location}`;
+
+                output += firstLine + '\n' + secondLine + '\n\n';
+            });
+
+            formattedText.value = output.trim();
+        }
+
+        copyButton.addEventListener('click', () => {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(formattedText.value).then(() => {
+                    const originalText = copyButton.textContent;
+                    copyButton.textContent = 'コピーしました！';
+                    setTimeout(() => {
+                        copyButton.textContent = originalText;
+                    }, 2000);
+                }).catch(err => {
+                    alert('コピーに失敗しました: ' + err);
+                });
+            } else {
+                // フォールバック
+                formattedText.select();
+                document.execCommand('copy');
+                alert('コピーしました（フォールバック）');
+            }
+        });
+
+        function findBestDateMap(aiEvents) {
+            const dayOfWeekMap = { "日": 0, "月": 1, "火": 2, "水": 3, "木": 4, "金": 5, "土": 6 };
+            const headers = [...new Set(aiEvents.map(e => e.header_text))].filter(Boolean)
+                .map(h => {
+                    const match = String(h || '').trim().match(/(\d+)\s*(.+)/);
+                    return match ? { text: String(h || '').trim(), day: parseInt(match[1]), dayOfWeek: dayOfWeekMap[match[2].trim()] } : null;
+                })
+                .filter(Boolean);
+
+            const dateMap = {};
+            const today = new Date();
+            const toYyyyMmDd = (d) => {
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${y}-${m}-${day}`;
+            }
+
+            headers.forEach(header => {
+                let bestDate = null;
+                let minDiff = Infinity;
+
+                for (let i = -60; i <= 60; i++) {
+                    const tempDate = new Date(today);
+                    tempDate.setDate(today.getDate() + i);
+                    
+                    if (tempDate.getDate() === header.day && tempDate.getDay() === header.dayOfWeek) {
+                        const diff = Math.abs(tempDate.getTime() - today.getTime());
+                        if (diff < minDiff) {
+                            minDiff = diff;
+                            bestDate = tempDate;
+                        }
+                    }
+                }
+                if (bestDate) {
+                    dateMap[header.text] = toYyyyMmDd(bestDate);
+                }
+            });
+            
+            return dateMap;
+        }
+
+        function getEventsFromTable() {
+            const events = [];
+            const rows = eventsTableContainer.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const registerCheckbox = row.querySelector('input[name="register"]');
+                if (registerCheckbox && registerCheckbox.checked) {
+                    const event = {};
+                    row.querySelectorAll('input[type="date"], input[type="text"], input[type="hidden"]').forEach(input => {
+                        event[input.name] = input.value;
+                    });
+                    events.push(event);
+                }
+            });
+            return events;
+        }
+
+        function displayResults(results) {
+            let html = '<h3>登録結果</h3><ul style="list-style-type: none; padding-left: 0; font-family: monospace;">';
+            results.forEach(result => {
+                if (result.status === 'success') {
+                    html += `<li>✅ 成功: ${result.title} - <a href="${result.event_url}" target="_blank">カレンダーで見る</a></li>`;
+                } else {
+                    html += `<li>❌ 失敗: ${result.title} - ${result.message}</li>`;
+                }
+            });
+            html += '</ul>';
+            registrationStatus.innerHTML = html; // 表示先を変更
+        }
+
+    </script>
+</body>
+</html>

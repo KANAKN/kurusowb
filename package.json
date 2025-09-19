@@ -1,0 +1,20 @@
+{
+  "name": "kuruwb",
+  "version": "1.0.0",
+  "description": "Schedule registration tool",
+  "main": "app.js",
+  "type": "module",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "googleapis": "^140.0.1",
+    "multer": "^1.4.5-lts.1"
+  },
+  "engines": {
+    "node": "20"
+  }
+}

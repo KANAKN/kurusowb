@@ -26,6 +26,11 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // --- Expressサーバーのルーティング ---
 const upload = multer({ storage: multer.memoryStorage() });
 
+app.get('/healthz', (req, res) => {
+    // ヘルスチェック用のエンドポイント
+    res.status(200).json({ status: 'ok' });
+});
+
 app.get('/', (req, res) => {
     res.sendFile(path.join(process.cwd(), 'index.html'));
 });

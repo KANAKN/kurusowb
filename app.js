@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import multer from 'multer';
 import { google } from 'googleapis';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { VertexAI } from '@google-cloud/vertexai';
 import fs from 'fs/promises';
 import path from 'path';
 import process from 'process';
@@ -14,14 +14,15 @@ app.use(express.json());
 
 // --- サービスアカウント認証 ---
 const KEYFILEPATH = process.env.RENDER ? '/etc/secrets/service-account.json' : path.join(process.cwd(), 'service-account.json');
+// Vertex AIライブラリが環境変数を参照するため設定
+process.env.GOOGLE_APPLICATION_CREDENTIALS = KEYFILEPATH;
+
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
 const auth = new google.auth.GoogleAuth({
     keyFile: KEYFILEPATH,
     scopes: SCOPES,
 });
 const calendar = google.calendar({ version: 'v3', auth });
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // --- Expressサーバーのルーティング ---
 const upload = multer({ storage: multer.memoryStorage() });
@@ -41,13 +42,28 @@ app.post('/analyze', upload.single('scheduleImage'), async (req, res) => {
     }
     
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        // Vertex AI クライアントを初期化 (リージョン指定)
+        const PROJECT_ID = '196312803586';
+        const LOCATION = 'us-central1';
+        const vertex_ai = new VertexAI({ project: PROJECT_ID, location: LOCATION });
+
+        // モデルをインスタンス化 (Vertex AI用のモデル名)
+        const model = vertex_ai.getGenerativeModel({
+            model: 'gemini-1.5-flash-001',
+        });
+
         const imagePart = { inlineData: { data: req.file.buffer.toString("base64"), mimeType: req.file.mimetype } };
-        
         const promptTemplate = await fs.readFile('prompt.txt', 'utf-8');
         
-        const result = await model.generateContent([promptTemplate, imagePart]);
-        const jsonResponse = result.response.text().trim();
+        // Vertex AI用のリクエスト形式に変換
+        const request = {
+            contents: [{ role: 'user', parts: [{ text: promptTemplate }, imagePart] }],
+        };
+        
+        const result = await model.generateContent(request);
+        
+        // Vertex AI用のレスポンス形式からテキストを抽出
+        const jsonResponse = result.response.candidates[0].content.parts[0].text.trim();
         
         console.log('[Analyze] Raw AI Response:\n', jsonResponse); // ★★★ 生レスポンスのログ ★★★
         

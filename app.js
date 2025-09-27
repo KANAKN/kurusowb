@@ -51,10 +51,16 @@ app.post('/analyze', upload.single('scheduleImage'), async (req, res) => {
         const result = await model.generateContent([promptTemplate, imagePart]);
         
         // 古いライブラリの応答形式に合わせる
-        const jsonResponse = result.response.candidates[0].content.parts[0].text.trim();
+        let jsonResponse = result.response.candidates[0].content.parts[0].text.trim();
         
         console.log('[Analyze] Raw AI Response:\n', jsonResponse); // ★★★ 生レスポンスのログ ★★★
         
+        // AIがMarkdownコードブロックを返す場合があるため、それを除去する
+        const markdownMatch = jsonResponse.match(/```(json)?\s*([\s\S]*?)\s*```/);
+        if (markdownMatch) {
+            jsonResponse = markdownMatch[2];
+        }
+
         const analysisResult = JSON.parse(jsonResponse);
         
         console.log('[Analyze] 解析完了。');

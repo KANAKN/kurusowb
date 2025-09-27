@@ -41,7 +41,7 @@ app.post('/analyze', upload.single('scheduleImage'), async (req, res) => {
     }
     
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash", generationConfig: { responseMimeType: "application/json" } });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const imagePart = { inlineData: { data: req.file.buffer.toString("base64"), mimeType: req.file.mimetype } };
         
         const promptTemplate = await fs.readFile('prompt.txt', 'utf-8');

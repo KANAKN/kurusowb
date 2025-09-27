@@ -43,7 +43,7 @@ app.post('/analyze', upload.single('scheduleImage'), async (req, res) => {
     
     try {
         // 安定版のVisionモデルを指定
-        const model = genAI.getGenerativeModel({ model: "gemini-1.0-pro-vision-001" });
+        const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
         
         const imagePart = { inlineData: { data: req.file.buffer.toString("base64"), mimeType: req.file.mimetype } };
         const promptTemplate = await fs.readFile('prompt.txt', 'utf-8');
